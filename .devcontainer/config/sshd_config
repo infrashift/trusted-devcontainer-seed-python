@@ -1,0 +1,32 @@
+# Hardened sshd config for VS Code Remote-SSH devcontainer (mesh-only).
+Port 2222
+AddressFamily any
+ListenAddress 0.0.0.0
+ListenAddress ::
+
+# Authentication
+PermitRootLogin no
+PasswordAuthentication no
+UsePAM yes
+AllowUsers user
+PubkeyAuthentication yes
+AuthorizedKeysFile .ssh/authorized_keys
+
+# ForceCommand routes both interactive logins and VS Code Remote-SSH's
+# non-TTY exec through bash -l so /etc/profile.d/proxy.sh is sourced
+# (HTTP_PROXY for the http-egress gateway).
+ForceCommand /home/user/.local/bin/ssh-login.sh
+
+# VS Code Remote-SSH RPC needs TCP forwarding.
+AllowTcpForwarding yes
+AllowAgentForwarding yes
+
+# Environment
+AcceptEnv LANG LC_* TERM EDITOR
+
+# Keepalive
+ClientAliveInterval 60
+ClientAliveCountMax 3
+
+# Subsystems — VS Code Remote-SSH uses SFTP to upload vscode-server
+Subsystem sftp /usr/libexec/openssh/sftp-server

@@ -1,0 +1,130 @@
+# Chad's Python workspace, and it is TWO THINGS IN ONE IMAGE ON PURPOSE.
+#
+# The first half is the InfraShift trusted Python devcontainer, unchanged: the
+# same digest-pinned Fedora 43 base and the same nine features the published
+# template names. The Dev Container CLI installs the features from
+# devcontainer.json; this file is the image they are installed onto.
+#
+# The second half is the WORKSPACE RUNTIME CONTRACT -- sshd, an entrypoint, a
+# skeleton project directory -- which the devpod jobspec assumes and a plain
+# devcontainer does not have. Putting it here rather than layering it on
+# afterwards is the whole point of the arrangement: the forge's build output IS
+# the image that runs, so the image that was built, scanned, signed and published is
+# the image the developer connects to. There is no second build, and no gap
+# between what was attested and what is running.
+#
+# THE ACCOUNT IS `user', NOT THE TEMPLATE'S `dev', AND THE UID/GID MATTER.
+# uid 1001 gid 0 is the platform contract, assumed in four places that are not
+# per-workspace: the onboarding portal renders `User user' from a single
+# WORKSPACE_SSH_USER env var, container/config/sshd_config names it, the
+# jobspec's volume-init chowns to it, and the portal's README tells the
+# developer their work lives in /home/user/workspace. Renaming the account here
+# is a one-line deviation from the template that leaves every one of those
+# unchanged; making them per-workspace instead is strictly more work for the
+# same result.
+#
+# THE REFERENCES ARE ghcr.io AND ARE LEFT THAT WAY. The Dev Container CLI
+# fetches a feature from the registry its reference names, so whatever is
+# written here is where the pull goes, and a committed repository must not carry a
+# datacenter's address. sm-http-egress allows ghcr.io and
+# pkg-containers.githubusercontent.com for exactly this. The nexus-oci
+# ghcr proxy is the governed path for anything that addresses it explicitly.
+FROM ghcr.io/infrashift/trusted-base-images/trusted/fedora43-minimal@sha256:382dde3e8556e4ee9c57c699187b8b2b1a3e338e33819c0f4937cc5386cf97de
+
+USER root
+
+# --- 1. The template's own package baseline -----------------------------------
+#
+# Feature prerequisites (tar, gzip, curl, util-linux) and the interactive
+# baseline fedora43-minimal ships none of. Kept identical to the template's
+# Containerfile so a template bump is a readable diff rather than a merge.
+RUN dnf5 -y install --allowerasing --setopt=install_weak_deps=False \
+        tar gzip curl util-linux unzip libicu openssl-libs \
+        procps-ng diffutils findutils less which fzf \
+    && dnf5 clean all && rm -rf /var/cache/dnf
+
+# --- 2. The workspace runtime -------------------------------------------------
+#
+# openssh-server is what the devpod jobspec's health check probes and what VS
+# Code Remote-SSH connects to. It is NOT in the trusted base, and its absence
+# would present as a workspace that starts, reports healthy on its container,
+# and refuses every connection.
+# postgresql is the CLIENT (psql): this workspace has a companion database
+# (chad-devpod-vscode-db) and the devpod verify reaches it from inside the
+# workspace by Consul VIP DNS with psql -- the proof that the mesh, the DNS and
+# the intention all hold from the developer's own shell.
+# openssh-clients is the SSH CLIENT: what `git push' to the forge runs, over
+# the agent VS Code forwards from the developer's laptop. Not a dependency of
+# openssh-server on Fedora, and its absence presents as git saying
+# "ssh: command not found" inside a workspace that sshd serves perfectly well.
+RUN dnf5 -y install --setopt=install_weak_deps=False \
+        openssh-server openssh-clients rsync git postgresql \
+    && dnf5 clean all && rm -rf /var/cache/dnf \
+    && ssh-keygen -A
+
+# --- 3. The account the platform expects --------------------------------------
+#
+# gid 0, not a private group: the host volume is chowned to uid 1001 gid 0 by
+# the jobspec's volume-init task, and a home directory the developer cannot
+# write presents as a broken image rather than a permissions problem. This is
+# the deviation from the template's `dev' (1001:1001) and it is deliberate.
+RUN id -u user >/dev/null 2>&1 || useradd -u 1001 -g 0 -m -s /bin/bash user
+# A GROUP NAMED `user' EXISTS TOO, and it is not the primary group. The trusted
+# features' shared runner drops to the target user for its userland lane with
+# `setpriv --reuid=$_REMOTE_USER --regid=$_REMOTE_USER' -- the GROUP is looked
+# up by the USER's name, which every template satisfies because they create
+# both with one name. This image deliberately does not (gid 0, above), and the
+# first userland feature, grype, died with `setpriv: failed to parse regid:
+# 'user''. The group exists so the name resolves; files a userland feature
+# installs land 1001:1001 under /home/user, which the developer owns by uid
+# either way, and --init-groups still grants gid 0 from the passwd entry.
+RUN getent group user >/dev/null 2>&1 || groupadd -g 1001 user
+
+COPY config/sshd_config /etc/ssh/sshd_config
+
+# The skeleton the volume-init prestart task copies into an EMPTY volume. It is
+# staged outside /home/user because the volume is mounted over that path at
+# runtime: anything written here under /home/user would be masked by the mount
+# and look like it had silently failed to install.
+COPY --chown=1001:0 workspace-skel/ /opt/workspace-skel/
+COPY --chown=1001:0 entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod 0755 /usr/local/bin/entrypoint.sh
+
+# THE THIRD FILE OF THE CONTRACT, and the one the first two point at without
+# saying so: config/sshd_config carries `ForceCommand
+# /home/user/.local/bin/ssh-login.sh', so sshd refuses EVERY login -- interactive
+# and VS Code's alike -- with `No such file or directory' if the wrapper is not
+# at that path. Chad's first workspace built, published, deployed, passed its
+# sshd check and could not be logged into; the verify play was the first thing
+# to try. Installed under /home/user because that is where sshd_config looks;
+# the host volume mounts at /home/user/workspace, one level down, so this is
+# not masked at runtime. `make test' now asserts the two files agree.
+COPY --chown=1001:0 config/ssh-login.sh /home/user/.local/bin/ssh-login.sh
+RUN chmod 0755 /home/user/.local/bin/ssh-login.sh
+
+# ~/.local/bin ON THE LOGIN PATH. Every trusted feature installs its tool under
+# $_REMOTE_USER_HOME/.local/bin (uv, ruff, jq, yq, syft, grype, python3.13), and
+# the image's ENV PATH lists it -- but sshd sanitises the environment, the
+# ForceCommand starts `bash -l', and a Fedora login shell rebuilds PATH from
+# /etc/profile, which does not add ~/.local/bin. So every feature this image
+# installs was invisible to an SSH session -- VS Code's included -- while
+# present on disk. The default image's entrypoint renders its profile.d
+# snippets at start; this one is static because the path is.
+RUN printf '%s\n' '# ~/.local/bin: where the trusted devcontainer features install' \
+      'case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) PATH="$HOME/.local/bin:$PATH" ;; esac' \
+      'export PATH' > /etc/profile.d/local-bin.sh \
+    && chmod 0644 /etc/profile.d/local-bin.sh
+
+USER user
+ENV HOME=/home/user
+# _REMOTE_USER_HOME is NOT set here. It was, while the forge built this with
+# envbuilder (v1.3.0 injected _REMOTE_USER and not _REMOTE_USER_HOME into
+# feature installs); the Dev Container CLI that builds it now injects both
+# from /etc/passwd for `user', which is the value HOME above already states.
+ENV PATH="/home/user/.local/bin:${PATH}"
+
+# sshd is PID 1 rather than `sleep infinity'. A devcontainer's default command
+# keeps a container alive for a tool that execs into it; this workspace is
+# reached over the network and has nothing to exec through.
+EXPOSE 2222
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

@@ -1,0 +1,31 @@
+# The workspace's companion database: PostgreSQL, built by the forge from this
+# directory and published beside the devcontainer as
+# <namespace>/python-workspace-db:<rev>, then deployed by the devpod root as its
+# own job on the mesh. The workspace reaches it at $DB_HOST:$DB_PORT.
+#
+# FROM THE PLATFORM'S HOSTED REPOSITORY, BY NAME. The package policy
+# (nexus-uar/config/package-policy.json, block-docker-unvetted-databases)
+# refuses database images from Docker Hub: "Database images must come from
+# the platform team's hosted repository". That repository is
+# oci-images-internal, named here as a repository and never as an address --
+# the forge's warm stage puts this datacenter's pull door in front of it.
+# The platform team mirrored the amd64 manifest of
+# docker.io/library/postgres:16-alpine there, digest-for-digest.
+#
+# PINNED BY DIGEST, because the forge's warm stage refuses a tag: a tag can
+# be moved, and two builds of one revision would then build FROM different
+# bytes while claiming the same input. Read the digest with
+#   skopeo inspect --raw docker://<door>/oci-images-internal/postgres:16-alpine
+FROM oci-images-internal/postgres@sha256:075f7ba66bc9b3ce7d6b8b635208ff61cd7cf1a67d71ec530eec5d7ae0cbe571
+
+# The demo credentials the workspace's psql uses; the same trio the built-in
+# demo database ships with, so a developer moving from one to the other
+# changes nothing in their code.
+ENV POSTGRES_USER=demouser \
+    POSTGRES_PASSWORD=demopass \
+    POSTGRES_DB=demodb
+
+# Seeded on first start. This layer is also what makes the image demonstrably
+# non-empty: the forge refuses a service image whose largest layer is under
+# 512 bytes, and a Containerfile of ENV lines alone would produce exactly that.
+COPY init.sql /docker-entrypoint-initdb.d/00-workspace.sql

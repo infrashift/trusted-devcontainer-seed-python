@@ -1,0 +1,21 @@
+{
+    "name": "Python workspace",
+    "build": {
+        "dockerfile": "./Containerfile"
+    },
+    "containerUser": "user",
+    "updateRemoteUserUID": false,
+    "features": {
+        "ghcr.io/infrashift/trusted-devcontainer-features/bootstrap@sha256:071c527c9e6e7acc87556bc8ef6b495a59f2f5569ff97c796e95148a3c9fd97c": {},
+        "ghcr.io/infrashift/trusted-devcontainer-features/python@sha256:b8064fc4b60284500a279cc3562297409e333d530ef18d7c42d0661670e91f81": {
+            "target_version": "3.13"
+        },
+        "ghcr.io/infrashift/trusted-devcontainer-features/uv-ruff@sha256:5f2db64e6de1f6b66f029f63b5d582ffa3919119eda19230834e9746db952c7b": {},
+        "ghcr.io/infrashift/trusted-devcontainer-features/git@sha256:5356d126c102cdfa9534939e24b67914ee3a21c4f2d2fceaa6abcdff4dac7649": {},
+        "ghcr.io/infrashift/trusted-devcontainer-features/git-lfs@sha256:b076f7bcd87c374e12f4ca05724764d3290ba7f7f9421a0e090929873fc29db7": {},
+        "ghcr.io/infrashift/trusted-devcontainer-features/grype@sha256:de2661d1f5e3eaaef214d2a7c2c55c3db66f06f1e0f5759cb65a5941d8e99acf": {},
+        "ghcr.io/infrashift/trusted-devcontainer-features/syft@sha256:ab1fe4eea82b195addabcb534b87609c4e3a70ad746e3892e86f54da5795d7f5": {},
+        "ghcr.io/infrashift/trusted-devcontainer-features/jq@sha256:93c75ebca376542a50b92dd0710fdc93721b2d880eb3cd6a9f0bcd88185ceb27": {},
+        "ghcr.io/infrashift/trusted-devcontainer-features/yq@sha256:41f3db44c086bbc3401b40494116b616cd9715f86ec2fdeaee1d9a46a23cffe7": {}
+    }
+}

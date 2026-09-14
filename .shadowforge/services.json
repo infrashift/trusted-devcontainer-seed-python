@@ -1,0 +1,16 @@
+{
+  "_comment": "Companion services the forge builds beside the devcontainer and the devpod root deploys next to the workspace. Validated by the forge against its closed schema (app/internal/services/services.cue): a typo here is a red pull request naming this file. Defaults are left out on purpose -- dockerfile, protocol, interval -- so the services.json the forge publishes for a build visibly differs from this source: THAT file, with every default filled, is what an operator passes to the devpod root.",
+  "services": [
+    {
+      "name": "db",
+      "context_dir": "services/db",
+      "port": 5432,
+      "persistent": true,
+      "mount_path": "/var/lib/postgresql/data",
+      "health_check": {
+        "type": "script",
+        "command": "pg_isready -q -h 127.0.0.1 -p 5432"
+      }
+    }
+  ]
+}

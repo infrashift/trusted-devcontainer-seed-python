@@ -1,0 +1,35 @@
+# Build output. `make all` stages what the forge would collect under dist/;
+# it is a product of the tree, not part of it.
+/dist/
+
+# KEY MATERIAL AND SSH CONFIGURATION NEVER ENTER THIS REPOSITORY.
+#
+# Every key a developer holds is generated inside Vault and reaches them through
+# the onboarding bundle -- the workspace key, the bastion key, the forge key --
+# and reaches the workspace through Nomad's Vault templates. The sshd
+# configuration under .devcontainer/config is the SERVER's contract and carries
+# no key. A private key copied into a checkout by hand, or a laptop's
+# ~/.ssh/config pasted in for convenience, would be pushed to the forge and
+# built into an image, and an image is not un-pushed by deleting the file
+# afterwards. So the shapes such files take are refused here, before git sees
+# them.
+*.key
+*.pem
+id_*
+!id_*.pub
+*_rsa
+*_ed25519
+*_ecdsa
+authorized_keys
+known_hosts
+.ssh/
+config.d/
+ssh_config
+*-workspace-onboarding/
+*-workspace-onboarding.tar.gz
+*-workspace-onboarding.zip
+
+# Local environment and tokens.
+.env
+*.env
+.envrc
