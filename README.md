@@ -20,7 +20,7 @@ is yours.
     Makefile, scripts/      the golden workflow -- the interface between this
                             repository and the forge; for a devcontainer
                             repository it validates rather than compiles
-    .shadowforge/services.json
+    .devcontainer/services.json
                             companion services the forge builds beside the
                             devcontainer and the platform deploys next to it
     services/db/            one of them: a PostgreSQL for the workspace
@@ -65,7 +65,7 @@ under the repository owner's namespace, tagged with the revision.
 
 ## Companion services
 
-`.shadowforge/services.json` declares the containers the workspace talks to.
+`.devcontainer/services.json` declares the containers the workspace talks to.
 The forge builds each from its `context_dir` on the same merge that builds
 the devcontainer, publishes it beside it as `<repository>-<name>:<rev>`, and
 The platform deploys them next to the
