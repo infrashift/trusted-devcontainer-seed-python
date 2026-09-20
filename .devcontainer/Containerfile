@@ -62,6 +62,18 @@ RUN dnf5 -y install --setopt=install_weak_deps=False \
     && dnf5 clean all && rm -rf /var/cache/dnf \
     && ssh-keygen -A
 
+# THE DEFAULT BRANCH IS `main', stated in the image rather than left to git.
+# The platform names every default branch main -- onboard-developer.sh PUTs
+# `default_branch: main' on the project it creates, and the central pipeline
+# publishes from main alone -- but git's own built-in default is still
+# `master' and this image sets no system git config. So `git init' inside a
+# workspace produced a branch the forge does not expect, and the developer
+# found out at the first push (gcloud-dc 2026-09-20, chad/dotnet).
+#
+# --system, so a developer's own ~/.gitconfig still wins, and the git-lfs
+# feature appends its filters to the same file when the CLI installs it.
+RUN git config --system init.defaultBranch main
+
 # --- 3. The account the platform expects --------------------------------------
 #
 # gid 0, not a private group: the host volume is chowned to uid 1001 gid 0 by

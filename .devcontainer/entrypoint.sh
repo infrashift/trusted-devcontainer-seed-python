@@ -108,11 +108,18 @@ if [[ -d /home/user/.ssh ]]; then
 fi
 
 # ---- Runtime devcontainer feature install (node) --------------------------
-# Demonstrates the http-egress gateway in action at first boot. The
-# devcontainer.json under /home/user/workspace/.devcontainer/ is the source of
-# truth for both features; the github-cli one is already baked in at build
-# time, so we install only `node` here. Gated by a sentinel so subsequent
-# container restarts are fast.
+# THE DEFAULT IMAGE ONLY. Its devcontainer.json names two features, github-cli
+# and node; the Containerfile already installs gh with dnf, so only `node` is
+# left for first boot, and doing it there demonstrates the http-egress gateway
+# in action. Gated by a sentinel so later restarts are fast.
+#
+# A SEED-BUILT IMAGE DOES NEITHER, and this comment used to say otherwise. A
+# seed carries no devcontainer CLI, so install_node_feature returns at the
+# `command -v devcontainer` guard below and the sentinel never appears -- which
+# is why devpod verify check 6 reports the sentinel absent for a seed image and
+# calls that expected. No seed declares github-cli either, so `gh` is NOT in a
+# seed-built workspace. Read as a promise that it is, this paragraph cost a
+# reader an afternoon (gcloud-dc 2026-09-20).
 SENTINEL=/home/user/.devcontainer-features.runtime-applied
 
 # This runs in the BACKGROUND, after sshd is already accepting connections,
