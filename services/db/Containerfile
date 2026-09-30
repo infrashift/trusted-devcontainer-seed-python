@@ -1,22 +1,27 @@
-# The workspace's companion database: PostgreSQL, built by the forge from this
-# directory and published beside the devcontainer as
-# <namespace>/python-workspace-db:<rev>, then deployed by the devpod root as its
-# own job on the mesh. The workspace reaches it at $DB_HOST:$DB_PORT.
+# The workspace's companion database: PostgreSQL, built by the pipeline from
+# this directory and published beside the devcontainer as
+# <namespace>/<repo>-db:<rev>, then deployed as its own job on the mesh. The
+# workspace reaches it at $DB_HOST:$DB_PORT.
 #
-# FROM THE PLATFORM'S HOSTED REPOSITORY, BY NAME. The package policy
-# (nexus-uar/config/package-policy.json, block-docker-unvetted-databases)
-# refuses database images from Docker Hub: "Database images must come from
-# the platform team's hosted repository". That repository is
-# oci-images-internal, named here as a repository and never as an address --
-# the forge's warm stage puts this datacenter's pull door in front of it.
-# The platform team mirrored the amd64 manifest of
-# docker.io/library/postgres:16-alpine there, digest-for-digest.
+# FROM THE INFRASHIFT TRUSTED LINE, BY NAME AND DIGEST: a byte-for-byte mirror
+# of Docker Hardened Images' dhi.io/postgres:16-debian, signature-verified and
+# CVE-gated by github.com/infrashift/trusted-service-containers. The reference
+# is public and portable -- this directory builds anywhere podman or docker
+# can reach ghcr.io. Inside the platform the pipeline pulls it through the
+# datacenter's own registry proxy, by the same digest, without this file
+# knowing.
 #
-# PINNED BY DIGEST, because the forge's warm stage refuses a tag: a tag can
-# be moved, and two builds of one revision would then build FROM different
-# bytes while claiming the same input. Read the digest with
-#   skopeo inspect --raw docker://<door>/oci-images-internal/postgres:16-alpine
-FROM oci-images-internal/postgres@sha256:075f7ba66bc9b3ce7d6b8b635208ff61cd7cf1a67d71ec530eec5d7ae0cbe571
+# PINNED BY DIGEST (the multi-arch INDEX, so it builds on amd64 and arm64):
+# a tag can move, and two builds of one revision would then build FROM
+# different bytes while claiming the same input. Read the current digest with
+#   skopeo inspect --raw docker://ghcr.io/infrashift/trusted-service-containers/trusted/postgres:16-debian | sha256sum
+FROM ghcr.io/infrashift/trusted-service-containers/trusted/postgres@sha256:ae316a451e7e609ed2f6d532a8a43e34e9d483840602cb011f0e7128aef28a0e
+
+# The image's own default is /var/lib/postgresql/16/data. The companion's
+# volume is mounted at /var/lib/postgresql/data (.devcontainer/services.json
+# mount_path), so the data directory must be there -- otherwise the database
+# lives in the container and is lost on every restart.
+ENV PGDATA=/var/lib/postgresql/data
 
 # The demo credentials the workspace's psql uses; the same trio the built-in
 # demo database ships with, so a developer moving from one to the other
@@ -25,7 +30,14 @@ ENV POSTGRES_USER=demouser \
     POSTGRES_PASSWORD=demopass \
     POSTGRES_DB=demodb
 
-# Seeded on first start. This layer is also what makes the image demonstrably
-# non-empty: the forge refuses a service image whose largest layer is under
-# 512 bytes, and a Containerfile of ENV lines alone would produce exactly that.
+# Seeded on first start by seed-entrypoint.sh: this image's own entrypoint does
+# not run /docker-entrypoint-initdb.d. These layers are also what makes the
+# image demonstrably non-empty -- the pipeline refuses a service image whose
+# largest layer is under 512 bytes.
 COPY init.sql /docker-entrypoint-initdb.d/00-workspace.sql
+COPY --chmod=0755 seed-entrypoint.sh /usr/local/bin/seed-entrypoint.sh
+
+# The image runs as uid 70 (postgres), never root. The volume arrives
+# root-owned; .devcontainer/services.json declares volume_uid 70 so the
+# platform hands it over before this starts.
+ENTRYPOINT ["/usr/local/bin/seed-entrypoint.sh"]
